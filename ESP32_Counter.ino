@@ -137,7 +137,7 @@ void loop() {
 
 		if (feedback == 9) {
 
-			variable.total_accumulator = 0;
+			variable.total_accumulator = 1;
 			variable.counter = 0;
 
 			pcnt_counter_clear(PCNT_TEST_UNIT);
