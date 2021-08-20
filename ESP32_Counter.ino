@@ -2,6 +2,7 @@
 Author: Smetronic
 Date: 2020-11-26
 Sate: Tested = Working, WatchDog
+Updated: 2021-08-19
 */
 
 extern "C" {
@@ -57,6 +58,7 @@ void setup() {
 	pinMode(18, INPUT);
 
 	timer.every(1000, count);
+	watchdog = false;
 }
 
 int seconds = 1;
@@ -78,10 +80,10 @@ void loop() {
 
 	timer.tick();
 
-	Serial.printf("[%llu]", (variable.total_accumulator + variable.counter));
-	Serial.println(seconds);
+	//Serial.printf("[%llu]", (variable.total_accumulator + variable.counter));
+	//Serial.println(seconds);
 
-	if (seconds >= 60 && watchdog) {
+	if (seconds >= 60) {
 		digitalWrite(ledPin, HIGH);
 
 		pinMode(18, OUTPUT);
@@ -91,23 +93,46 @@ void loop() {
 		ESP.restart();
 	}
 
-	
 
 
-	Serial2.printf("[%llu]", (variable.total_accumulator + variable.counter));
-	Serial2.println();
+	if (Serial.available() > 0) {
 
+		int feedback = Serial.read();
 
+		if (feedback == 8)
+		{
+			watchdog = true;
+			seconds = 0;
+		}
+
+		if (feedback == 9) {
+
+			variable.total_accumulator = 1;
+			variable.counter = 0;
+
+			pcnt_counter_clear(PCNT_TEST_UNIT);
+			pcnt_counter_resume(PCNT_TEST_UNIT);
+
+			delay(100);
+
+			StoreStruct(&variable, sizeof(variable));
+
+			delay(100);
+
+			ESP.restart();
+		}
+
+		Serial.flush();
+	}
 
 	if (Serial2.available() > 0) {
-		seconds = 0;
 
 		int feedback = Serial2.read();
 
-		if (feedback == 2)
+		if (feedback == 8)
 		{
+			seconds = 0;
 			watchdog = true;
-			Serial.println("Watchdog Enabled");
 		}
 
 		if (feedback == 9) {
@@ -118,29 +143,33 @@ void loop() {
 			pcnt_counter_clear(PCNT_TEST_UNIT);
 			pcnt_counter_resume(PCNT_TEST_UNIT);
 
-			delay(300);
+			delay(100);
 
 			StoreStruct(&variable, sizeof(variable));
+
+			delay(100);
+
 			ESP.restart();
 		}
-
-		delay(300);
 
 		Serial2.flush();
 	}
 
-	delay(500);
+	delay(200);
 
 	unsigned long currentMillis = millis();
 
 	//Save the Values in Memory
-	if ((currentMillis - previousMillis >= 5000) && variable.total_accumulator != prior_count) {
-		prior_count = variable.total_accumulator;
+	if ((currentMillis - previousMillis >= 5000) && variable.counter != prior_count) {
+	//if ((currentMillis - previousMillis >= 5000)) {
+		prior_count = variable.counter;
 		previousMillis = currentMillis;
 
 		StoreStruct(&variable, sizeof(variable));
 
 		delay(100);
+
+		Serial.println("Saved");
 
 		if (debug) {
 			Serial.println("Saved");
@@ -191,12 +220,20 @@ void CalculatePulses() {
 	{
 		variable.counter = flowCounter;
 
+		Serial.printf("[%llu]", (variable.total_accumulator + variable.counter));
+		Serial.println(seconds);
+
+
+		Serial2.printf("[%llu]", (variable.total_accumulator + variable.counter));
+		Serial2.println();
+
 		if (flowCounter >= 50) {
 			variable.total_accumulator += flowCounter;
 
 			pcnt_counter_clear(PCNT_TEST_UNIT);
 			pcnt_counter_resume(PCNT_TEST_UNIT);
 		}
+
 	}
 
 	if (debug) {
